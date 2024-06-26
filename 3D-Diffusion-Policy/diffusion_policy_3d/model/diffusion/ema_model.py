@@ -2,6 +2,7 @@ import copy
 import torch
 from torch.nn.modules.batchnorm import _BatchNorm
 
+
 class EMAModel:
     """
     Exponential Moving Average of models weights
@@ -64,12 +65,12 @@ class EMAModel:
         #         old_all_dataptrs.add(data_ptr)
 
         all_dataptrs = set()
-        for module, ema_module in zip(new_model.modules(), self.averaged_model.modules()):            
+        for module, ema_module in zip(new_model.modules(), self.averaged_model.modules()):
             for param, ema_param in zip(module.parameters(recurse=False), ema_module.parameters(recurse=False)):
                 # iterative over immediate parameters only.
                 if isinstance(param, dict):
                     raise RuntimeError('Dict parameter not supported')
-                
+
                 # data_ptr = param.data_ptr()
                 # if data_ptr != 0:
                 #     all_dataptrs.add(data_ptr)

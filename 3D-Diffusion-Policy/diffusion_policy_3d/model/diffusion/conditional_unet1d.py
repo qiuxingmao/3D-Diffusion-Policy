@@ -11,8 +11,8 @@ from diffusion_policy_3d.model.diffusion.conv1d_components import (
 from diffusion_policy_3d.model.diffusion.positional_embedding import SinusoidalPosEmb
 
 
-
 logger = logging.getLogger(__name__)
+
 
 class CrossAttention(nn.Module):
     def __init__(self, in_dim, cond_dim, out_dim):
@@ -30,16 +30,15 @@ class CrossAttention(nn.Module):
         key = self.key_proj(cond)   # [batch_size, horizon, out_dim]
         value = self.value_proj(cond)  # [batch_size, horizon, out_dim]
 
-
         # Compute attention
         attn_weights = torch.matmul(query, key.transpose(-2, -1))  # [batch_size, horizon, horizon]
         attn_weights = F.softmax(attn_weights, dim=-1)
 
         # Apply attention
         attn_output = torch.matmul(attn_weights, value)  # [batch_size, horizon, out_dim]
-        
+
         return attn_output
-    
+
 
 class ConditionalResidualBlock1D(nn.Module):
 
@@ -63,11 +62,10 @@ class ConditionalResidualBlock1D(nn.Module):
                         n_groups=n_groups),
         ])
 
-        
         self.condition_type = condition_type
 
         cond_channels = out_channels
-        if condition_type == 'film': # FiLM modulation https://arxiv.org/abs/1709.07871
+        if condition_type == 'film':  # FiLM modulation https://arxiv.org/abs/1709.07871
             # predicts per-channel scale and bias
             cond_channels = out_channels * 2
             self.cond_encoder = nn.Sequential(
@@ -97,7 +95,7 @@ class ConditionalResidualBlock1D(nn.Module):
             )
         else:
             raise NotImplementedError(f"condition_type {condition_type} not implemented")
-        
+
         self.out_channels = out_channels
         # make sure dimensions compatible
         self.residual_conv = nn.Conv1d(in_channels, out_channels, 1) \
@@ -111,8 +109,8 @@ class ConditionalResidualBlock1D(nn.Module):
             returns:
             out : [ batch_size x out_channels x horizon ]
         '''
-        out = self.blocks[0](x)  
-        if cond is not None:      
+        out = self.blocks[0](x)
+        if cond is not None:
             if self.condition_type == 'film':
                 embed = self.cond_encoder(cond)
                 embed = embed.reshape(embed.shape[0], 2, self.out_channels, 1)
@@ -124,7 +122,7 @@ class ConditionalResidualBlock1D(nn.Module):
                 out = out + embed
             elif self.condition_type == 'cross_attention_add':
                 embed = self.cond_encoder(x.permute(0, 2, 1), cond)
-                embed = embed.permute(0, 2, 1) # [batch_size, out_channels, horizon]
+                embed = embed.permute(0, 2, 1)  # [batch_size, out_channels, horizon]
                 out = out + embed
             elif self.condition_type == 'cross_attention_film':
                 embed = self.cond_encoder(x.permute(0, 2, 1), cond)
@@ -147,26 +145,26 @@ class ConditionalResidualBlock1D(nn.Module):
 
 
 class ConditionalUnet1D(nn.Module):
-    def __init__(self, 
-        input_dim,
-        local_cond_dim=None,
-        global_cond_dim=None,
-        diffusion_step_embed_dim=256,
-        down_dims=[256,512,1024],
-        kernel_size=3,
-        n_groups=8,
-        condition_type='film',
-        use_down_condition=True,
-        use_mid_condition=True,
-        use_up_condition=True,
-        ):
+    def __init__(self,
+                 input_dim,
+                 local_cond_dim=None,
+                 global_cond_dim=None,
+                 diffusion_step_embed_dim=256,
+                 down_dims=[256, 512, 1024],
+                 kernel_size=3,
+                 n_groups=8,
+                 condition_type='film',
+                 use_down_condition=True,
+                 use_mid_condition=True,
+                 use_up_condition=True,
+                 ):
         super().__init__()
         self.condition_type = condition_type
-        
+
         self.use_down_condition = use_down_condition
         self.use_mid_condition = use_mid_condition
         self.use_up_condition = use_up_condition
-        
+
         all_dims = [input_dim] + list(down_dims)
         start_dim = down_dims[0]
 
@@ -190,12 +188,12 @@ class ConditionalUnet1D(nn.Module):
             local_cond_encoder = nn.ModuleList([
                 # down encoder
                 ConditionalResidualBlock1D(
-                    dim_in, dim_out, cond_dim=cond_dim, 
+                    dim_in, dim_out, cond_dim=cond_dim,
                     kernel_size=kernel_size, n_groups=n_groups,
                     condition_type=condition_type),
                 # up encoder
                 ConditionalResidualBlock1D(
-                    dim_in, dim_out, cond_dim=cond_dim, 
+                    dim_in, dim_out, cond_dim=cond_dim,
                     kernel_size=kernel_size, n_groups=n_groups,
                     condition_type=condition_type)
             ])
@@ -219,11 +217,11 @@ class ConditionalUnet1D(nn.Module):
             is_last = ind >= (len(in_out) - 1)
             down_modules.append(nn.ModuleList([
                 ConditionalResidualBlock1D(
-                    dim_in, dim_out, cond_dim=cond_dim, 
+                    dim_in, dim_out, cond_dim=cond_dim,
                     kernel_size=kernel_size, n_groups=n_groups,
                     condition_type=condition_type),
                 ConditionalResidualBlock1D(
-                    dim_out, dim_out, cond_dim=cond_dim, 
+                    dim_out, dim_out, cond_dim=cond_dim,
                     kernel_size=kernel_size, n_groups=n_groups,
                     condition_type=condition_type),
                 Downsample1d(dim_out) if not is_last else nn.Identity()
@@ -243,12 +241,11 @@ class ConditionalUnet1D(nn.Module):
                     condition_type=condition_type),
                 Upsample1d(dim_in) if not is_last else nn.Identity()
             ]))
-        
+
         final_conv = nn.Sequential(
             Conv1dBlock(start_dim, start_dim, kernel_size=kernel_size),
             nn.Conv1d(start_dim, input_dim, 1),
         )
-        
 
         self.diffusion_step_encoder = diffusion_step_encoder
         self.local_cond_encoder = local_cond_encoder
@@ -260,10 +257,10 @@ class ConditionalUnet1D(nn.Module):
             "number of parameters: %e", sum(p.numel() for p in self.parameters())
         )
 
-    def forward(self, 
-            sample: torch.Tensor, 
-            timestep: Union[torch.Tensor, float, int], 
-            local_cond=None, global_cond=None, **kwargs):
+    def forward(self,
+                sample: torch.Tensor,
+                timestep: Union[torch.Tensor, float, int],
+                local_cond=None, global_cond=None, **kwargs):
         """
         x: (B,T,input_dim)
         timestep: (B,) or int, diffusion step
@@ -289,7 +286,6 @@ class ConditionalUnet1D(nn.Module):
                 timestep_embed = timestep_embed.unsqueeze(1).expand(-1, global_cond.shape[1], -1)
             global_feature = torch.cat([timestep_embed, global_cond], axis=-1)
 
-
         # encode local features
         h_local = list()
         if local_cond is not None:
@@ -299,7 +295,7 @@ class ConditionalUnet1D(nn.Module):
             h_local.append(x)
             x = resnet2(local_cond, global_feature)
             h_local.append(x)
-        
+
         x = sample
         h = []
         for idx, (resnet, resnet2, downsample) in enumerate(self.down_modules):
@@ -316,13 +312,11 @@ class ConditionalUnet1D(nn.Module):
             h.append(x)
             x = downsample(x)
 
-
         for mid_module in self.mid_modules:
             if self.use_mid_condition:
                 x = mid_module(x, global_feature)
             else:
                 x = mid_module(x)
-
 
         for idx, (resnet, resnet2, upsample) in enumerate(self.up_modules):
             x = torch.cat((x, h.pop()), dim=1)
@@ -338,10 +332,8 @@ class ConditionalUnet1D(nn.Module):
                 x = resnet2(x)
             x = upsample(x)
 
-
         x = self.final_conv(x)
 
         x = einops.rearrange(x, 'b t h -> b h t')
 
         return x
-

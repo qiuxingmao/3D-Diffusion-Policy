@@ -19,7 +19,6 @@ import socket
 import pickle
 
 
-
 def farthest_point_sampling(points, num_points=1024, use_cuda=True):
     K = [num_points]
     if use_cuda:
@@ -35,15 +34,15 @@ def farthest_point_sampling(points, num_points=1024, use_cuda=True):
 
     return sampled_points, indices
 
+
 def preprocess_point_cloud(points, use_cuda=True):
-    
+
     num_points = 1024
 
-    extrinsics_matrix = np.array([[ 0.5213259,  -0.84716441,  0.10262438,  0.04268034],
-                                  [ 0.25161211,  0.26751035,  0.93012341,  0.15598059],
+    extrinsics_matrix = np.array([[0.5213259,  -0.84716441,  0.10262438,  0.04268034],
+                                  [0.25161211,  0.26751035,  0.93012341,  0.15598059],
                                   [-0.81542053, -0.45907589,  0.3526169,   0.47807532],
-                                  [ 0.,          0.,          0.,          1.        ]])
-
+                                  [0.,          0.,          0.,          1.]])
 
     WORK_SPACE = [
         [0.65, 1.1],
@@ -57,31 +56,30 @@ def preprocess_point_cloud(points, use_cuda=True):
     point_homogeneous = np.dot(point_homogeneous, extrinsics_matrix)
     point_xyz = point_homogeneous[..., :-1]
     points[..., :3] = point_xyz
-    
-     # crop
-    points = points[np.where((points[..., 0] > WORK_SPACE[0][0]) & (points[..., 0] < WORK_SPACE[0][1]) &
-                                (points[..., 1] > WORK_SPACE[1][0]) & (points[..., 1] < WORK_SPACE[1][1]) &
-                                (points[..., 2] > WORK_SPACE[2][0]) & (points[..., 2] < WORK_SPACE[2][1]))]
 
-    
+    # crop
+    points = points[np.where((points[..., 0] > WORK_SPACE[0][0]) & (points[..., 0] < WORK_SPACE[0][1]) &
+                             (points[..., 1] > WORK_SPACE[1][0]) & (points[..., 1] < WORK_SPACE[1][1]) &
+                             (points[..., 2] > WORK_SPACE[2][0]) & (points[..., 2] < WORK_SPACE[2][1]))]
+
     points_xyz = points[..., :3]
     points_xyz, sample_indices = farthest_point_sampling(points_xyz, num_points, use_cuda)
     sample_indices = sample_indices.cpu()
     points_rgb = points[sample_indices, 3:][0]
     points = np.hstack((points_xyz, points_rgb))
     return points
-   
+
+
 def preproces_image(image):
     img_size = 84
-    
+
     image = image.astype(np.float32)
     image = torch.from_numpy(image).cuda()
-    image = image.permute(2, 0, 1) # HxWx4 -> 4xHxW
+    image = image.permute(2, 0, 1)  # HxWx4 -> 4xHxW
     image = torchvision.transforms.functional.resize(image, (img_size, img_size))
-    image = image.permute(1, 2, 0) # 4xHxW -> HxWx4
+    image = image.permute(1, 2, 0)  # 4xHxW -> HxWx4
     image = image.cpu().numpy()
     return image
-
 
 
 expert_data_path = '/home/zhanggu/3D-Diffusion-Policy/3D-Diffusion-Policy/data/realdex_roll'
@@ -111,7 +109,6 @@ if os.path.exists(save_data_path):
         exit()
 os.makedirs(save_data_path, exist_ok=True)
 
-    
 
 for demo_dir in demo_dirs:
     dir_name = os.path.dirname(demo_dir)
@@ -122,12 +119,12 @@ for demo_dir in demo_dirs:
 
     pcd_dirs = os.path.join(dir_name, 'pcd')
     if not os.path.exists(pcd_dirs):
-           os.makedirs(pcd_dirs)
-        
+        os.makedirs(pcd_dirs)
+
     demo_length = len(demo['point_cloud'])
     # dict_keys(['point_cloud', 'rgbd', 'agent_pos', 'action'])
     for step_idx in tqdm.tqdm(range(demo_length)):
-       
+
         total_count += 1
         obs_image = demo['image'][step_idx]
         obs_depth = demo['depth'][step_idx]
@@ -136,20 +133,16 @@ for demo_dir in demo_dirs:
         obs_pointcloud = demo['point_cloud'][step_idx]
         robot_state = demo['agent_pos'][step_idx]
         action = demo['action'][step_idx]
-    
-        
+
         obs_pointcloud = preprocess_point_cloud(obs_pointcloud, use_cuda=True)
         img_arrays.append(obs_image)
         action_arrays.append(action)
         point_cloud_arrays.append(obs_pointcloud)
         depth_arrays.append(obs_depth)
         state_arrays.append(robot_state)
-    
+
     episode_ends_arrays.append(total_count)
 
- 
-
-        
 
 # create zarr file
 zarr_root = zarr.group(save_data_path)
@@ -157,8 +150,8 @@ zarr_data = zarr_root.create_group('data')
 zarr_meta = zarr_root.create_group('meta')
 
 img_arrays = np.stack(img_arrays, axis=0)
-if img_arrays.shape[1] == 3: # make channel last
-    img_arrays = np.transpose(img_arrays, (0,2,3,1))
+if img_arrays.shape[1] == 3:  # make channel last
+    img_arrays = np.transpose(img_arrays, (0, 2, 3, 1))
 point_cloud_arrays = np.stack(point_cloud_arrays, axis=0)
 depth_arrays = np.stack(depth_arrays, axis=0)
 action_arrays = np.stack(action_arrays, axis=0)
@@ -191,4 +184,3 @@ cprint(f'state shape: {state_arrays.shape}, range: [{np.min(state_arrays)}, {np.
 cprint(f'episode_ends shape: {episode_ends_arrays.shape}, range: [{np.min(episode_ends_arrays)}, {np.max(episode_ends_arrays)}]', 'green')
 cprint(f'total_count: {total_count}', 'green')
 cprint(f'Saved zarr file to {save_data_path}', 'green')
-

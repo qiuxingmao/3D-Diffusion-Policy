@@ -18,30 +18,31 @@ from diffusion_policy_3d.common.pytorch_util import dict_apply
 from diffusion_policy_3d.common.model_util import print_params
 from diffusion_policy_3d.model.vision.pointnet_extractor import DP3Encoder
 
+
 class SimpleDP3(BasePolicy):
-    def __init__(self, 
-            shape_meta: dict,
-            noise_scheduler: DDPMScheduler,
-            horizon, 
-            n_action_steps, 
-            n_obs_steps,
-            num_inference_steps=None,
-            obs_as_global_cond=True,
-            diffusion_step_embed_dim=256,
-            down_dims=(256,512,1024),
-            kernel_size=5,
-            n_groups=8,
-            condition_type="film",
-            use_down_condition=True,
-            use_mid_condition=True,
-            use_up_condition=True,
-            encoder_output_dim=256,
-            crop_shape=None,
-            use_pc_color=False,
-            pointnet_type="pointnet",
-            pointcloud_encoder_cfg=None,
-            # parameters passed to step
-            **kwargs):
+    def __init__(self,
+                 shape_meta: dict,
+                 noise_scheduler: DDPMScheduler,
+                 horizon,
+                 n_action_steps,
+                 n_obs_steps,
+                 num_inference_steps=None,
+                 obs_as_global_cond=True,
+                 diffusion_step_embed_dim=256,
+                 down_dims=(256, 512, 1024),
+                 kernel_size=5,
+                 n_groups=8,
+                 condition_type="film",
+                 use_down_condition=True,
+                 use_mid_condition=True,
+                 use_up_condition=True,
+                 encoder_output_dim=256,
+                 crop_shape=None,
+                 use_pc_color=False,
+                 pointnet_type="pointnet",
+                 pointcloud_encoder_cfg=None,
+                 # parameters passed to step
+                 **kwargs):
         super().__init__()
 
         self.condition_type = condition_type
@@ -51,22 +52,21 @@ class SimpleDP3(BasePolicy):
         self.action_shape = action_shape
         if len(action_shape) == 1:
             action_dim = action_shape[0]
-        elif len(action_shape) == 2: # use multiple hands
+        elif len(action_shape) == 2:  # use multiple hands
             action_dim = action_shape[0] * action_shape[1]
         else:
             raise NotImplementedError(f"Unsupported action shape {action_shape}")
-            
+
         obs_shape_meta = shape_meta['obs']
         obs_dict = dict_apply(obs_shape_meta, lambda x: x['shape'])
 
-
         obs_encoder = DP3Encoder(observation_space=obs_dict,
-                                                   img_crop_shape=crop_shape,
-                                                out_channel=encoder_output_dim,
-                                                pointcloud_encoder_cfg=pointcloud_encoder_cfg,
-                                                use_pc_color=use_pc_color,
-                                                pointnet_type=pointnet_type,
-                                                )
+                                 img_crop_shape=crop_shape,
+                                 out_channel=encoder_output_dim,
+                                 pointcloud_encoder_cfg=pointcloud_encoder_cfg,
+                                 use_pc_color=use_pc_color,
+                                 pointnet_type=pointnet_type,
+                                 )
 
         # create diffusion model
         obs_feature_dim = obs_encoder.output_shape()
@@ -78,13 +78,11 @@ class SimpleDP3(BasePolicy):
                 global_cond_dim = obs_feature_dim
             else:
                 global_cond_dim = obs_feature_dim * n_obs_steps
-        
 
         self.use_pc_color = use_pc_color
         self.pointnet_type = pointnet_type
         cprint(f"[SDP3] use_pc_color: {self.use_pc_color}", "yellow")
         cprint(f"[SDP3] pointnet_type: {self.pointnet_type}", "yellow")
-
 
         model = ConditionalUnet1D(
             input_dim=input_dim,
@@ -103,8 +101,7 @@ class SimpleDP3(BasePolicy):
         self.obs_encoder = obs_encoder
         self.model = model
         self.noise_scheduler = noise_scheduler
-        
-        
+
         self.noise_scheduler_pc = copy.deepcopy(noise_scheduler)
         self.mask_generator = LowdimMaskGenerator(
             action_dim=action_dim,
@@ -113,7 +110,7 @@ class SimpleDP3(BasePolicy):
             fix_obs_steps=True,
             action_visible=False
         )
-        
+
         self.normalizer = LinearNormalizer()
         self.horizon = horizon
         self.obs_feature_dim = obs_feature_dim
@@ -127,51 +124,44 @@ class SimpleDP3(BasePolicy):
             num_inference_steps = noise_scheduler.config.num_train_timesteps
         self.num_inference_steps = num_inference_steps
 
-
         print_params(self)
-        
+
     # ========= inference  ============
-    def conditional_sample(self, 
-            condition_data, condition_mask,
-            condition_data_pc=None, condition_mask_pc=None,
-            local_cond=None, global_cond=None,
-            generator=None,
-            # keyword arguments to scheduler.step
-            **kwargs
-            ):
+    def conditional_sample(self,
+                           condition_data, condition_mask,
+                           condition_data_pc=None, condition_mask_pc=None,
+                           local_cond=None, global_cond=None,
+                           generator=None,
+                           # keyword arguments to scheduler.step
+                           **kwargs
+                           ):
         model = self.model
         scheduler = self.noise_scheduler
 
-
         trajectory = torch.randn(
-            size=condition_data.shape, 
+            size=condition_data.shape,
             dtype=condition_data.dtype,
             device=condition_data.device)
 
         # set step values
         scheduler.set_timesteps(self.num_inference_steps)
 
-
         for t in scheduler.timesteps:
             # 1. apply conditioning
             trajectory[condition_mask] = condition_data[condition_mask]
 
-
             model_output = model(sample=trajectory,
-                                timestep=t, 
-                                local_cond=local_cond, global_cond=global_cond)
-            
+                                 timestep=t,
+                                 local_cond=local_cond, global_cond=global_cond)
+
             # 3. compute previous image: x_t -> x_t-1
             trajectory = scheduler.step(
                 model_output, t, trajectory, ).prev_sample
-            
-                
-        # finally make sure conditioning is enforced
-        trajectory[condition_mask] = condition_data[condition_mask]   
 
+        # finally make sure conditioning is enforced
+        trajectory[condition_mask] = condition_data[condition_mask]
 
         return trajectory
-
 
     def predict_action(self, obs_dict: Dict[str, torch.Tensor]) -> Dict[str, torch.Tensor]:
         """
@@ -184,8 +174,7 @@ class SimpleDP3(BasePolicy):
         if not self.use_pc_color:
             nobs['point_cloud'] = nobs['point_cloud'][..., :3]
         this_n_point_cloud = nobs['point_cloud']
-        
-        
+
         value = next(iter(nobs.values()))
         B, To = value.shape[:2]
         T = self.horizon
@@ -202,7 +191,7 @@ class SimpleDP3(BasePolicy):
         global_cond = None
         if self.obs_as_global_cond:
             # condition through global feature
-            this_nobs = dict_apply(nobs, lambda x: x[:,:To,...].reshape(-1,*x.shape[2:]))
+            this_nobs = dict_apply(nobs, lambda x: x[:, :To, ...].reshape(-1, *x.shape[2:]))
             nobs_features = self.obs_encoder(this_nobs)
             if "cross_attention" in self.condition_type:
                 # treat as a sequence
@@ -215,40 +204,39 @@ class SimpleDP3(BasePolicy):
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
         else:
             # condition through impainting
-            this_nobs = dict_apply(nobs, lambda x: x[:,:To,...].reshape(-1,*x.shape[2:]))
+            this_nobs = dict_apply(nobs, lambda x: x[:, :To, ...].reshape(-1, *x.shape[2:]))
             nobs_features = self.obs_encoder(this_nobs)
             # reshape back to B, T, Do
             nobs_features = nobs_features.reshape(B, To, -1)
             cond_data = torch.zeros(size=(B, T, Da+Do), device=device, dtype=dtype)
             cond_mask = torch.zeros_like(cond_data, dtype=torch.bool)
-            cond_data[:,:To,Da:] = nobs_features
-            cond_mask[:,:To,Da:] = True
+            cond_data[:, :To, Da:] = nobs_features
+            cond_mask[:, :To, Da:] = True
 
         # run sampling
         nsample = self.conditional_sample(
-            cond_data, 
+            cond_data,
             cond_mask,
             local_cond=local_cond,
             global_cond=global_cond,
             **self.kwargs)
-        
+
         # unnormalize prediction
-        naction_pred = nsample[...,:Da]
+        naction_pred = nsample[..., :Da]
         action_pred = self.normalizer['action'].unnormalize(naction_pred)
 
         # get action
         start = To - 1
         end = start + self.n_action_steps
-        action = action_pred[:,start:end]
-        
-        # get prediction
+        action = action_pred[:, start:end]
 
+        # get prediction
 
         result = {
             'action': action,
             'action_pred': action_pred,
         }
-        
+
         return result
 
     # ========= training  ============
@@ -262,8 +250,7 @@ class SimpleDP3(BasePolicy):
 
         if not self.use_pc_color:
             nobs['point_cloud'] = nobs['point_cloud'][..., :3]
-        
-        
+
         batch_size = nactions.shape[0]
         horizon = nactions.shape[1]
 
@@ -272,13 +259,11 @@ class SimpleDP3(BasePolicy):
         global_cond = None
         trajectory = nactions
         cond_data = trajectory
-        
-       
-        
+
         if self.obs_as_global_cond:
             # reshape B, T, ... to B*T
-            this_nobs = dict_apply(nobs, 
-                lambda x: x[:,:self.n_obs_steps,...].reshape(-1,*x.shape[2:]))
+            this_nobs = dict_apply(nobs,
+                                   lambda x: x[:, :self.n_obs_steps, ...].reshape(-1, *x.shape[2:]))
             nobs_features = self.obs_encoder(this_nobs)
 
             if "cross_attention" in self.condition_type:
@@ -288,7 +273,7 @@ class SimpleDP3(BasePolicy):
                 # reshape back to B, Do
                 global_cond = nobs_features.reshape(batch_size, -1)
             # this_n_point_cloud = this_nobs['imagin_robot'].reshape(batch_size,-1, *this_nobs['imagin_robot'].shape[1:])
-            this_n_point_cloud = this_nobs['point_cloud'].reshape(batch_size,-1, *this_nobs['point_cloud'].shape[1:])
+            this_n_point_cloud = this_nobs['point_cloud'].reshape(batch_size, -1, *this_nobs['point_cloud'].shape[1:])
             this_n_point_cloud = this_n_point_cloud[..., :3]
         else:
             # reshape B, T, ... to B*T
@@ -299,18 +284,16 @@ class SimpleDP3(BasePolicy):
             cond_data = torch.cat([nactions, nobs_features], dim=-1)
             trajectory = cond_data.detach()
 
-
         # generate impainting mask
         condition_mask = self.mask_generator(trajectory.shape)
 
         # Sample noise that we'll add to the images
         noise = torch.randn(trajectory.shape, device=trajectory.device)
 
-        
         bsz = trajectory.shape[0]
         # Sample a random timestep for each image
         timesteps = torch.randint(
-            0, self.noise_scheduler.config.num_train_timesteps, 
+            0, self.noise_scheduler.config.num_train_timesteps,
             (bsz,), device=trajectory.device
         ).long()
 
@@ -318,8 +301,6 @@ class SimpleDP3(BasePolicy):
         # (this is the forward diffusion process)
         noisy_trajectory = self.noise_scheduler.add_noise(
             trajectory, noise, timesteps)
-        
-
 
         # compute loss mask
         loss_mask = ~condition_mask
@@ -328,14 +309,13 @@ class SimpleDP3(BasePolicy):
         noisy_trajectory[condition_mask] = cond_data[condition_mask]
 
         # Predict the noise residual
-        
-        pred = self.model(sample=noisy_trajectory, 
-                        timestep=timesteps, 
-                            local_cond=local_cond, 
-                            global_cond=global_cond)
 
+        pred = self.model(sample=noisy_trajectory,
+                          timestep=timesteps,
+                          local_cond=local_cond,
+                          global_cond=global_cond)
 
-        pred_type = self.noise_scheduler.config.prediction_type 
+        pred_type = self.noise_scheduler.config.prediction_type
         if pred_type == 'epsilon':
             target = noise
         elif pred_type == 'sample':
@@ -359,17 +339,15 @@ class SimpleDP3(BasePolicy):
         loss = loss * loss_mask.type(loss.dtype)
         loss = reduce(loss, 'b ... -> b (...)', 'mean')
         loss = loss.mean()
-        
 
         loss_dict = {
-                'bc_loss': loss.item(),
-            }
+            'bc_loss': loss.item(),
+        }
 
         # print(f"t2-t1: {t2-t1:.3f}")
         # print(f"t3-t2: {t3-t2:.3f}")
         # print(f"t4-t3: {t4-t3:.3f}")
         # print(f"t5-t4: {t5-t4:.3f}")
         # print(f"t6-t5: {t6-t5:.3f}")
-        
-        return loss, loss_dict
 
+        return loss, loss_dict

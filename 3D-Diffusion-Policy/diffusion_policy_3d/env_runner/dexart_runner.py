@@ -56,7 +56,6 @@ class DexArtRunner(BaseRunner):
         self.logger_util_train = logger_util.LargestKRecorder(K=3)
         self.logger_util_train10 = logger_util.LargestKRecorder(K=5)
 
-        
     def run(self, policy: BasePolicy):
         device = policy.device
         dtype = policy.dtype
@@ -65,10 +64,9 @@ class DexArtRunner(BaseRunner):
         all_returns_train = []
         all_success_rates_train = []
 
-
         ##############################
         # train env loop
-        for episode_id in tqdm.tqdm(range(self.episode_train), desc=f"DexArt {self.task_name} Train Env",leave=False, mininterval=self.tqdm_interval_sec):
+        for episode_id in tqdm.tqdm(range(self.episode_train), desc=f"DexArt {self.task_name} Train Env", leave=False, mininterval=self.tqdm_interval_sec):
             # start rollout
             obs = env_train.reset()
 
@@ -94,7 +92,6 @@ class DexArtRunner(BaseRunner):
                     obs_dict_input['agent_pos'] = obs_dict['agent_pos'].unsqueeze(0)
                     action_dict = policy.predict_action(obs_dict_input)
 
-
                 # device_transfer
                 np_action_dict = dict_apply(action_dict,
                                             lambda x: x.detach().to('cpu').numpy())
@@ -111,8 +108,6 @@ class DexArtRunner(BaseRunner):
 
             all_returns_train.append(reward_sum)
             all_success_rates_train.append(env_train.is_success())
-
-       
 
         SR_mean_train = np.mean(all_success_rates_train)
         returns_mean_train = np.mean(all_returns_train)
@@ -131,9 +126,8 @@ class DexArtRunner(BaseRunner):
 
         log_data['SR_train_L3'] = self.logger_util_train.average_of_largest_K()
         log_data['SR_train_L5'] = self.logger_util_train10.average_of_largest_K()
-        
 
-        cprint( f"Mean SR train: {SR_mean_train:.3f}", 'green')
+        cprint(f"Mean SR train: {SR_mean_train:.3f}", 'green')
 
         # visualize sim
         videos_train = env_train.env.get_video()

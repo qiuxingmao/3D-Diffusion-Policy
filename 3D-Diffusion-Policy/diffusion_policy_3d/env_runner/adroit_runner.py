@@ -64,12 +64,10 @@ class AdroitRunner(BaseRunner):
 
         all_goal_achieved = []
         all_success_rates = []
-        
-
 
         for episode_idx in tqdm.tqdm(range(self.eval_episodes), desc=f"Eval in Adroit {self.task_name} Pointcloud Env",
                                      leave=False, mininterval=self.tqdm_interval_sec):
-                
+
             # start rollout
             obs = env.reset()
             policy.reset()
@@ -91,7 +89,6 @@ class AdroitRunner(BaseRunner):
                     obs_dict_input['point_cloud'] = obs_dict['point_cloud'].unsqueeze(0)
                     obs_dict_input['agent_pos'] = obs_dict['agent_pos'].unsqueeze(0)
                     action_dict = policy.predict_action(obs_dict_input)
-                    
 
                 # device_transfer
                 np_action_dict = dict_apply(action_dict,
@@ -108,10 +105,8 @@ class AdroitRunner(BaseRunner):
             all_success_rates.append(info['goal_achieved'])
             all_goal_achieved.append(num_goal_achieved)
 
-
         # log
         log_data = dict()
-        
 
         log_data['mean_n_goal_achieved'] = np.mean(all_goal_achieved)
         log_data['mean_success_rates'] = np.mean(all_success_rates)

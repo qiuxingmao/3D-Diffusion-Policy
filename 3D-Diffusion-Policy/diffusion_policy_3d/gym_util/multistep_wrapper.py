@@ -7,7 +7,8 @@ import dill
 
 
 def stack_repeated(x, n):
-    return np.repeat(np.expand_dims(x,axis=0),n,axis=0)
+    return np.repeat(np.expand_dims(x, axis=0), n, axis=0)
+
 
 def repeated_box(box_space, n):
     return spaces.Box(
@@ -16,6 +17,7 @@ def repeated_box(box_space, n):
         shape=(n,) + box_space.shape,
         dtype=box_space.dtype
     )
+
 
 def repeated_space(space, n):
     if isinstance(space, spaces.Box):
@@ -32,12 +34,11 @@ def repeated_space(space, n):
 def take_last_n(x, n):
     x = list(x)
     n = min(len(x), n)
-    
+
     if isinstance(x[0], torch.Tensor):
         return torch.stack(x[-n:])
     else:
         return np.array(x[-n:])
-
 
 
 def dict_take_last_n(x, n):
@@ -77,19 +78,19 @@ def aggregate(data, method='max'):
 
 
 def stack_last_n_obs(all_obs, n_steps):
-    assert(len(all_obs) > 0)
+    assert (len(all_obs) > 0)
     all_obs = list(all_obs)
     if isinstance(all_obs[0], np.ndarray):
-        result = np.zeros((n_steps,) + all_obs[-1].shape, 
-            dtype=all_obs[-1].dtype)
+        result = np.zeros((n_steps,) + all_obs[-1].shape,
+                          dtype=all_obs[-1].dtype)
         start_idx = -min(n_steps, len(all_obs))
         result[start_idx:] = np.array(all_obs[start_idx:])
         if n_steps > len(all_obs):
             # pad
             result[:start_idx] = result[start_idx]
     elif isinstance(all_obs[0], torch.Tensor):
-        result = torch.zeros((n_steps,) + all_obs[-1].shape, 
-            dtype=all_obs[-1].dtype)
+        result = torch.zeros((n_steps,) + all_obs[-1].shape,
+                             dtype=all_obs[-1].dtype)
         start_idx = -min(n_steps, len(all_obs))
         result[start_idx:] = torch.stack(all_obs[start_idx:])
         if n_steps > len(all_obs):
@@ -101,13 +102,13 @@ def stack_last_n_obs(all_obs, n_steps):
 
 
 class MultiStepWrapper(gym.Wrapper):
-    def __init__(self, 
-            env, 
-            n_obs_steps, 
-            n_action_steps, 
-            max_episode_steps=None,
-            reward_agg_method='max'
-        ):
+    def __init__(self,
+                 env,
+                 n_obs_steps,
+                 n_action_steps,
+                 max_episode_steps=None,
+                 reward_agg_method='max'
+                 ):
         super().__init__(env)
         self._action_space = repeated_space(env.action_space, n_action_steps)
         self._observation_space = repeated_space(env.observation_space, n_obs_steps)
@@ -120,8 +121,8 @@ class MultiStepWrapper(gym.Wrapper):
         self.obs = deque(maxlen=n_obs_steps+1)
         self.reward = list()
         self.done = list()
-        self.info = defaultdict(lambda : deque(maxlen=n_obs_steps+1))
-    
+        self.info = defaultdict(lambda: deque(maxlen=n_obs_steps+1))
+
     def reset(self):
         """Resets the environment using kwargs."""
         obs = super().reset()
@@ -129,7 +130,7 @@ class MultiStepWrapper(gym.Wrapper):
         self.obs = deque([obs], maxlen=self.n_obs_steps+1)
         self.reward = list()
         self.done = list()
-        self.info = defaultdict(lambda : deque(maxlen=self.n_obs_steps+1))
+        self.info = defaultdict(lambda: deque(maxlen=self.n_obs_steps+1))
 
         obs = self._get_obs(self.n_obs_steps)
         return obs
@@ -147,7 +148,7 @@ class MultiStepWrapper(gym.Wrapper):
             self.obs.append(observation)
             self.reward.append(reward)
             if (self.max_episode_steps is not None) \
-                and (len(self.reward) >= self.max_episode_steps):
+                    and (len(self.reward) >= self.max_episode_steps):
                 # truncation
                 done = True
             self.done.append(done)
@@ -163,7 +164,7 @@ class MultiStepWrapper(gym.Wrapper):
         """
         Output (n_steps,) + obs_shape
         """
-        assert(len(self.obs) > 0)
+        assert (len(self.obs) > 0)
         if isinstance(self.observation_space, spaces.Box):
             return stack_last_n_obs(self.obs, n_steps)
         elif isinstance(self.observation_space, spaces.Dict):
@@ -180,17 +181,17 @@ class MultiStepWrapper(gym.Wrapper):
     def _add_info(self, info):
         for key, value in info.items():
             self.info[key].append(value)
-    
+
     def get_rewards(self):
         return self.reward
-    
+
     def get_attr(self, name):
         return getattr(self, name)
 
     def run_dill_function(self, dill_fn):
         fn = dill.loads(dill_fn)
         return fn(self)
-    
+
     def get_infos(self):
         result = dict()
         for k, v in self.info.items():

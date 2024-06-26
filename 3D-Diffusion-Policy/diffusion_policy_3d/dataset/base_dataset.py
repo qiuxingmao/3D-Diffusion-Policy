@@ -15,10 +15,10 @@ class BaseDataset(torch.utils.data.Dataset):
 
     def get_all_actions(self) -> torch.Tensor:
         raise NotImplementedError()
-    
+
     def __len__(self) -> int:
         return 0
-    
+
     def __getitem__(self, idx: int) -> Dict[str, torch.Tensor]:
         """
         output:

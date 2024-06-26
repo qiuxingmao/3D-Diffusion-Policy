@@ -20,9 +20,9 @@ def recursive_dict_list_tuple_apply(x, type_func_dict):
     Returns:
         y (dict or list or tuple): new nested dict-list-tuple
     """
-    assert(list not in type_func_dict)
-    assert(tuple not in type_func_dict)
-    assert(dict not in type_func_dict)
+    assert (list not in type_func_dict)
+    assert (tuple not in type_func_dict)
+    assert (dict not in type_func_dict)
 
     if isinstance(x, (dict, collections.OrderedDict)):
         new_x = collections.OrderedDict() if isinstance(x, collections.OrderedDict) else dict()
@@ -489,10 +489,10 @@ def reshape_dimensions_single(x, begin_axis, end_axis, target_dims):
     Returns:
         y (torch.Tensor): reshaped tensor
     """
-    assert(begin_axis <= end_axis)
-    assert(begin_axis >= 0)
-    assert(end_axis < len(x.shape))
-    assert(isinstance(target_dims, (tuple, list)))
+    assert (begin_axis <= end_axis)
+    assert (begin_axis >= 0)
+    assert (end_axis < len(x.shape))
+    assert (isinstance(target_dims, (tuple, list)))
     s = x.shape
     final_s = []
     for i in range(len(s)):
@@ -507,7 +507,7 @@ def reshape_dimensions(x, begin_axis, end_axis, target_dims):
     """
     Reshape selected dimensions for all tensors in nested dictionary or list or tuple 
     to a target dimension.
-    
+
     Args:
         x (dict or list or tuple): a possibly nested dictionary or list or tuple
         begin_axis (int): begin dimension
@@ -680,7 +680,7 @@ def gather_along_dim_with_dim_single(x, target_dim, source_dim, indices):
             from the other dimensions
         indices (torch.Tensor): flat index tensor with same shape as tensor @x along
             @source_dim
-    
+
     Returns:
         y (torch.Tensor): gathered tensor, with dimension @target_dim indexed out
     """
@@ -719,9 +719,9 @@ def gather_along_dim_with_dim(x, target_dim, source_dim, indices):
     Returns:
         y (dict or list or tuple): new nested dict-list-tuple
     """
-    return map_tensor(x, 
-        lambda y, t=target_dim, s=source_dim, i=indices: gather_along_dim_with_dim_single(y, t, s, i))
-    
+    return map_tensor(x,
+                      lambda y, t=target_dim, s=source_dim, i=indices: gather_along_dim_with_dim_single(y, t, s, i))
+
 
 def gather_sequence_single(seq, indices):
     """
